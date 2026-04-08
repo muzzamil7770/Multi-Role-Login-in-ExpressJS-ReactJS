@@ -233,11 +233,11 @@ flowchart TD
     J --> K[Render /dashboard]
     K --> L{Navigate to?}
 
-    L -->|Products| M[/products — CRUD]
+    L -->|Products| M["/products - CRUD"]
     L -->|Users| N{Is admin?}
     L -->|Logout| O[Destroy session]
 
-    N -->|Yes| P[/users — Admin CRUD]
+    N -->|Yes| P["/users - Admin CRUD"]
     N -->|No| Q[Redirect to /dashboard]
 
     O --> C
