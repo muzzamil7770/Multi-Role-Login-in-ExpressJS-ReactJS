@@ -20,6 +20,11 @@ const useAuthStore = create((set) => ({
     return data
   },
 
+  register: async (name, email, password, confPassword, role = 'user') => {
+    const { data } = await api.post('/register', { name, email, password, confPassword, role })
+    return data
+  },
+
   logout: async () => {
     await api.delete('/logout')
     set({ user: null })

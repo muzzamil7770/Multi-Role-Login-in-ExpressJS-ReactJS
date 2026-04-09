@@ -1,7 +1,50 @@
 import User from "../models/UserModel.js";
 import argon2 from "argon2";
 
-// Authenticates a user, starts a session, and returns basic profile data.
+// Registers a new user with complete details and returns the created user data.
+export const registerUser = async (req, res) => {
+    const { name, email, password, confPassword, role } = req.body;
+    
+    if (!name || !email || !password) {
+        return res.status(400).json({ msg: "All fields are required" });
+    }
+
+    if (password !== confPassword) {
+        return res.status(400).json({ msg: "Password and confirm password do not match" });
+    }
+
+    // Check if email already exists
+    const existingUser = await User.findOne({ where: { email } });
+    if (existingUser) {
+        return res.status(400).json({ msg: "Email already registered" });
+    }
+
+    const hashPassword = await argon2.hash(password);
+    
+    try {
+        const newUser = await User.create({
+            name,
+            email,
+            password: hashPassword,
+            role: role || 'user' // Default to 'user' if not specified
+        });
+
+        res.status(201).json({
+            msg: "Registration successful",
+            user: {
+                uuid: newUser.uuid,
+                name: newUser.name,
+                email: newUser.email,
+                role: newUser.role,
+                createdAt: newUser.createdAt
+            }
+        });
+    } catch (error) {
+        res.status(400).json({ msg: error.message });
+    }
+};
+
+// Authenticates a user, starts a session, and returns complete profile data.
 export const Login = async (req, res) =>{
     const user = await User.findOne({
         where: {
@@ -12,11 +55,13 @@ export const Login = async (req, res) =>{
     const match = await argon2.verify(user.password, req.body.password);
     if(!match) return res.status(400).json({msg: "Incorrect password"});
     req.session.userId = user.uuid;
-    const uuid = user.uuid;
-    const name = user.name;
-    const email = user.email;
-    const role = user.role;
-    res.status(200).json({uuid, name, email, role});
+    res.status(200).json({
+        uuid: user.uuid, 
+        name: user.name, 
+        email: user.email, 
+        role: user.role,
+        createdAt: user.createdAt
+    });
 }
 
 // Returns the currently logged-in user's profile using the session id.
@@ -25,7 +70,7 @@ export const Me = async (req, res) =>{
         return res.status(401).json({msg: "Please log in to your account!"});
     }
     const user = await User.findOne({
-        attributes:['uuid','name','email','role'],
+        attributes:['uuid','name','email','role','createdAt'],
         where: {
             uuid: req.session.userId
         }

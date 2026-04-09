@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, Link } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { z } from 'zod'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -70,6 +70,17 @@ export default function LoginPage() {
             {isSubmitting ? 'Signing in…' : 'Sign in'}
           </button>
         </form>
+
+        {/* Footer */}
+        <div className="mt-6 text-center text-sm text-slate-500">
+          Don't have an account?{' '}
+          <Link
+            to="/register"
+            className="text-primary-500 font-medium hover:text-primary-600 hover:underline transition-colors"
+          >
+            Create one now
+          </Link>
+        </div>
       </div>
     </div>
   )
