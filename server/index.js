@@ -13,6 +13,7 @@ import RegisterRoute from "./routes/RegisterRoute.js";
 import ProfileRoute from "./routes/ProfileRoute.js";
 import NotificationRoute from "./routes/NotificationRoute.js";
 import { initializeSocket } from "./services/SocketService.js";
+import { notFound, errorHandler } from "./middleware/ErrorHandler.js";
 
 dotenv.config();
 
@@ -54,6 +55,12 @@ app.use(DashboardRoute);
 app.use(RegisterRoute);
 app.use(ProfileRoute);
 app.use(NotificationRoute);
+
+// Handle unmatched routes (404)
+app.use(notFound);
+
+// Global error handler (must be last)
+app.use(errorHandler);
 
 // store.sync();
 

@@ -1,100 +1,82 @@
 import User from "../models/UserModel.js";
 import argon2 from "argon2";
+import { asyncHandler, AppError } from '../middleware/ErrorHandler.js';
 
 // Retrieves all users with limited public fields.
-export const getUsers = async(req, res) =>{
-    try {
-        const response = await User.findAll({
-            attributes:['uuid','name','email','role']
-        });
-        res.status(200).json(response);
-    } catch (error) {
-        res.status(500).json({msg: error.message});
-    }
-}
+export const getUsers = asyncHandler(async (req, res) => {
+    const response = await User.findAll({
+        attributes: ['uuid', 'name', 'email', 'role']
+    });
+    res.status(200).json(response);
+});
 
 // Retrieves a single user by UUID.
-export const getUserById = async(req, res) =>{
-    try {
-        const response = await User.findOne({
-            attributes:['uuid','name','email','role'],
-            where: {
-                uuid: req.params.id
-            }
-        });
-        res.status(200).json(response);
-    } catch (error) {
-        res.status(500).json({msg: error.message});
-    }
-}
+export const getUserById = asyncHandler(async (req, res) => {
+    const response = await User.findOne({
+        attributes: ['uuid', 'name', 'email', 'role'],
+        where: { uuid: req.params.id }
+    });
+    if (!response) throw new AppError("User not found", 404);
+    res.status(200).json(response);
+});
 
 // Creates a new user after validating the password confirmation.
-export const createUser = async(req, res) =>{
-    const {name, email, password, confPassword, role} = req.body;
-    if(password !== confPassword) return res.status(400).json({msg: "Password and confirm password do not match"});
-    const hashPassword = await argon2.hash(password);
-    try {
-        await User.create({
-            name: name,
-            email: email,
-            password: hashPassword,
-            role: role
-        });
-        res.status(201).json({msg: "Registration successful"});
-    } catch (error) {
-        res.status(400).json({msg: error.message});
+export const createUser = asyncHandler(async (req, res) => {
+    const { name, email, password, confPassword, role } = req.body;
+    
+    if (password !== confPassword) {
+        throw new AppError("Password and confirm password do not match", 400);
     }
-}
+    
+    const hashPassword = await argon2.hash(password);
+    await User.create({
+        name,
+        email,
+        password: hashPassword,
+        role
+    });
+    res.status(201).json({ msg: "Registration successful" });
+});
 
 // Updates an existing user's details and optionally replaces the password.
-export const updateUser = async(req, res) =>{
+export const updateUser = asyncHandler(async (req, res) => {
     const user = await User.findOne({
-        where: {
-            uuid: req.params.id
-        }
+        where: { uuid: req.params.id }
     });
-    if(!user) return res.status(404).json({msg: "User not found"});
-    const {name, email, password, confPassword, role} = req.body;
+    if (!user) throw new AppError("User not found", 404);
+    
+    const { name, email, password, confPassword, role } = req.body;
     let hashPassword;
-    if(password === "" || password === null){
-        hashPassword = user.password
-    }else{
+    
+    if (password === "" || password === null) {
+        hashPassword = user.password;
+    } else {
+        if (password !== confPassword) {
+            throw new AppError("Password and confirm password do not match", 400);
+        }
         hashPassword = await argon2.hash(password);
     }
-    if(password !== confPassword) return res.status(400).json({msg: "Password and confirm password do not match"});
-    try {
-        await User.update({
-            name: name,
-            email: email,
-            password: hashPassword,
-            role: role
-        },{
-            where:{
-                id: user.id
-            }
-        });
-        res.status(200).json({msg: "User updated successfully"});
-    } catch (error) {
-        res.status(400).json({msg: error.message});
-    }
-}
+    
+    await User.update({
+        name,
+        email,
+        password: hashPassword,
+        role
+    }, {
+        where: { id: user.id }
+    });
+    res.status(200).json({ msg: "User updated successfully" });
+});
 
 // Deletes a user record by UUID.
-export const deleteUser = async(req, res) =>{
+export const deleteUser = asyncHandler(async (req, res) => {
     const user = await User.findOne({
-        where: {
-            uuid: req.params.id
-        }
+        where: { uuid: req.params.id }
     });
-    if(!user) return res.status(404).json({msg: "User not found"});
-    try {
-        await User.destroy({
-            where:{
-                id: user.id
-            }
-        });
-        res.status(200).json({msg: "User deleted successfully"});
-    } catch (error) {
-        res.status(400).json({msg: error.message});
-    }
-}
+    if (!user) throw new AppError("User not found", 404);
+    
+    await User.destroy({
+        where: { id: user.id }
+    });
+    res.status(200).json({ msg: "User deleted successfully" });
+});
