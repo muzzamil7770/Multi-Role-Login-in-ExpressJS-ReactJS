@@ -39,7 +39,7 @@ export default function RegisterPage() {
       toast.success('Account created successfully! Please login.')
       navigate('/login')
     } catch (err) {
-      toast.error(err?.response?.data?.msg || 'Registration failed')
+      toast.error(err?.response?.data?.msg || err?.response?.data?.error || 'Registration failed')
     }
   }
 

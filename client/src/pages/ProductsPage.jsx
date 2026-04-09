@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useForm } from 'react-hook-form'
 import { z } from 'zod'
@@ -10,7 +10,7 @@ import Modal from '../components/Modal'
 import ConfirmDialog from '../components/ConfirmDialog'
 import FormField, { Input } from '../components/FormField'
 import { TableSkeleton } from '../components/Skeleton'
-import { getProducts, createProduct, updateProduct, deleteProduct } from '../services/productService'
+import { getProducts, getProductById, createProduct, updateProduct, deleteProduct } from '../services/productService'
 import useAuthStore from '../store/authStore'
 
 const schema = z.object({
@@ -24,36 +24,58 @@ export default function ProductsPage() {
   const isAdmin = user?.role === 'admin'
 
   const [modalOpen, setModalOpen] = useState(false)
-  const [editing, setEditing] = useState(null)
-  const [deleteTarget, setDeleteTarget] = useState(null)
+  const [editingId, setEditingId] = useState(null)
+  const [deleteTargetId, setDeleteTargetId] = useState(null)
 
   const { data: products, isLoading } = useQuery({ queryKey: ['products'], queryFn: getProducts })
+
+  // Fetch product by ID for edit modal
+  const { data: editingProduct, isLoading: loadingEdit } = useQuery({
+    queryKey: ['product', editingId],
+    queryFn: () => getProductById(editingId),
+    enabled: !!editingId && modalOpen,
+  })
+
+  // Fetch product by ID for delete confirmation
+  const { data: deleteProductData, isLoading: loadingDelete } = useQuery({
+    queryKey: ['product', deleteTargetId],
+    queryFn: () => getProductById(deleteTargetId),
+    enabled: !!deleteTargetId,
+  })
 
   const { register, handleSubmit, reset, formState: { errors, isSubmitting } } = useForm({
     resolver: zodResolver(schema),
   })
 
-  const openCreate = () => { setEditing(null); reset({ name: '', price: '' }); setModalOpen(true) }
-  const openEdit = (p) => { setEditing(p); reset({ name: p.name, price: p.price }); setModalOpen(true) }
+  const openCreate = () => { setEditingId(null); reset({ name: '', price: '' }); setModalOpen(true) }
+  const openEdit = (p) => { setEditingId(p.uuid); setModalOpen(true) }
+
+  // Populate form when edit data loads
+  useEffect(() => {
+    if (editingProduct) {
+      reset({ name: editingProduct.name, price: editingProduct.price })
+    }
+  }, [editingProduct, reset])
 
   const saveMutation = useMutation({
-    mutationFn: (data) => editing ? updateProduct(editing.uuid, data) : createProduct(data),
+    mutationFn: (data) => editingId ? updateProduct(editingId, data) : createProduct(data),
     onSuccess: (res) => {
       toast.success(res.msg)
       qc.invalidateQueries({ queryKey: ['products'] })
       setModalOpen(false)
+      setEditingId(null)
     },
-    onError: (err) => toast.error(err?.response?.data?.msg || 'Operation failed'),
+    onError: (err) => toast.error(err?.response?.data?.msg || err?.response?.data?.error || 'Operation failed'),
   })
 
   const deleteMutation = useMutation({
-    mutationFn: () => deleteProduct(deleteTarget.uuid),
+    mutationFn: () => deleteProduct(deleteTargetId),
     onSuccess: (res) => {
       toast.success(res.msg)
       qc.invalidateQueries({ queryKey: ['products'] })
-      setDeleteTarget(null)
+      setDeleteTargetId(null)
     },
-    onError: (err) => toast.error(err?.response?.data?.msg || 'Delete failed'),
+    onError: (err) => toast.error(err?.response?.data?.msg || err?.response?.data?.error || 'Delete failed'),
   })
 
   return (
@@ -129,41 +151,56 @@ export default function ProductsPage() {
       {/* Create / Edit Modal */}
       <Modal
         open={modalOpen}
-        onOpenChange={setModalOpen}
-        title={editing ? 'Edit Product' : 'Add Product'}
+        onOpenChange={(v) => { setModalOpen(v); if (!v) setEditingId(null); }}
+        title={editingId ? 'Edit Product' : 'Add Product'}
       >
-        <form onSubmit={handleSubmit((d) => saveMutation.mutate(d))} className="flex flex-col gap-4">
-          <FormField label="Product Name" error={errors.name?.message}>
-            <Input placeholder="e.g. Wireless Mouse" {...register('name')} />
-          </FormField>
-          <FormField label="Price ($)" error={errors.price?.message}>
-            <Input type="number" placeholder="e.g. 29" {...register('price')} />
-          </FormField>
-          <div className="flex justify-end gap-3 mt-2">
-            <button
-              type="button"
-              onClick={() => setModalOpen(false)}
-              className="px-4 py-2 text-sm rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={isSubmitting || saveMutation.isPending}
-              className="px-4 py-2 text-sm rounded-lg bg-primary-500 text-white hover:bg-primary-600 transition-colors disabled:opacity-60"
-            >
-              {saveMutation.isPending ? 'Saving…' : editing ? 'Update' : 'Create'}
-            </button>
+        {loadingEdit ? (
+          <div className="space-y-4 py-2">
+            <div className="h-10 bg-slate-200 rounded animate-pulse" />
+            <div className="h-10 bg-slate-200 rounded animate-pulse" />
+            <div className="flex justify-end gap-3">
+              <div className="h-9 bg-slate-200 rounded w-20 animate-pulse" />
+              <div className="h-9 bg-slate-200 rounded w-20 animate-pulse" />
+            </div>
           </div>
-        </form>
+        ) : (
+          <form onSubmit={handleSubmit((d) => saveMutation.mutate(d))} className="flex flex-col gap-4">
+            <FormField label="Product Name" error={errors.name?.message}>
+              <Input placeholder="e.g. Wireless Mouse" {...register('name')} />
+            </FormField>
+            <FormField label="Price ($)" error={errors.price?.message}>
+              <Input type="number" placeholder="e.g. 29" {...register('price')} />
+            </FormField>
+            <div className="flex justify-end gap-3 mt-2">
+              <button
+                type="button"
+                onClick={() => { setModalOpen(false); setEditingId(null); }}
+                className="px-4 py-2 text-sm rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={isSubmitting || saveMutation.isPending}
+                className="px-4 py-2 text-sm rounded-lg bg-primary-500 text-white hover:bg-primary-600 transition-colors disabled:opacity-60"
+              >
+                {saveMutation.isPending ? 'Saving…' : editingId ? 'Update' : 'Create'}
+              </button>
+            </div>
+          </form>
+        )}
       </Modal>
 
       {/* Delete Confirm */}
       <ConfirmDialog
-        open={!!deleteTarget}
-        onOpenChange={(v) => !v && setDeleteTarget(null)}
+        open={!!deleteTargetId}
+        onOpenChange={(v) => { if (!v) setDeleteTargetId(null); }}
         title="Delete Product"
-        description={`Are you sure you want to delete "${deleteTarget?.name}"? This action cannot be undone.`}
+        description={
+          loadingDelete
+            ? 'Loading product details…'
+            : `Are you sure you want to delete "${deleteProductData?.name}"? This action cannot be undone.`
+        }
         onConfirm={() => deleteMutation.mutate()}
       />
     </Layout>

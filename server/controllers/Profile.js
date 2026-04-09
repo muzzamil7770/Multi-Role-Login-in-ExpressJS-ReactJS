@@ -9,7 +9,7 @@ import { asyncHandler, AppError } from '../middleware/ErrorHandler.js';
 export const getProfile = asyncHandler(async (req, res) => {
     const user = await User.findOne({
         where: { id: req.userId },
-        attributes: ['uuid', 'name', 'email', 'role', 'createdAt', 'updatedAt']
+        attributes: ['id', 'uuid', 'name', 'email', 'role', 'createdAt', 'updatedAt']
     });
 
     if (!user) {

@@ -206,7 +206,7 @@ export default function ProfilePage() {
       qc.invalidateQueries({ queryKey: ['profile'] })
       reset({ name: '', email: '', password: '', confPassword: '' })
     },
-    onError: (err) => toast.error(err?.response?.data?.msg || 'Update failed')
+    onError: (err) => toast.error(err?.response?.data?.msg || err?.response?.data?.error || 'Update failed')
   })
 
   const deleteMutation = useMutation({
@@ -216,7 +216,7 @@ export default function ProfilePage() {
       useAuthStore.getState().logout()
       window.location.href = '/login'
     },
-    onError: (err) => toast.error(err?.response?.data?.msg || 'Delete failed')
+    onError: (err) => toast.error(err?.response?.data?.msg || err?.response?.data?.error || 'Delete failed')
   })
 
   const terminateSessionMutation = useMutation({
@@ -225,7 +225,7 @@ export default function ProfilePage() {
       toast.success('Session terminated')
       qc.invalidateQueries({ queryKey: ['sessions'] })
     },
-    onError: (err) => toast.error(err?.response?.data?.msg || 'Failed')
+    onError: (err) => toast.error(err?.response?.data?.msg || err?.response?.data?.error || 'Failed')
   })
 
   const terminateAllMutation = useMutation({
@@ -234,7 +234,7 @@ export default function ProfilePage() {
       toast.success('All other sessions terminated')
       qc.invalidateQueries({ queryKey: ['sessions'] })
     },
-    onError: (err) => toast.error(err?.response?.data?.msg || 'Failed')
+    onError: (err) => toast.error(err?.response?.data?.msg || err?.response?.data?.error || 'Failed')
   })
 
   const markReadMutation = useMutation({

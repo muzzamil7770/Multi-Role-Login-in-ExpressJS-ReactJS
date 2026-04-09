@@ -5,6 +5,8 @@ import dotenv from "dotenv";
 import http from 'http';
 import db from "./config/Database.js";
 import SequelizeStore from "connect-session-sequelize";
+// Import all models to ensure they are registered with Sequelize
+import "./models/index.js";
 import UserRoute from "./routes/UserRoute.js";
 import ProductRoute from "./routes/ProductRoute.js";
 import AuthRoute from "./routes/AuthRoute.js";

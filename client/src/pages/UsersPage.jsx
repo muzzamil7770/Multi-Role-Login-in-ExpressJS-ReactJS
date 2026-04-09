@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useForm } from 'react-hook-form'
 import { z } from 'zod'
@@ -10,7 +10,7 @@ import Modal from '../components/Modal'
 import ConfirmDialog from '../components/ConfirmDialog'
 import FormField, { Input, Select } from '../components/FormField'
 import { TableSkeleton } from '../components/Skeleton'
-import { getUsers, createUser, updateUser, deleteUser } from '../services/userService'
+import { getUsers, getUserById, createUser, updateUser, deleteUser } from '../services/userService'
 
 const createSchema = z.object({
   name: z.string().min(3, 'Name must be at least 3 characters'),
@@ -26,10 +26,13 @@ const createSchema = z.object({
 const editSchema = z.object({
   name: z.string().min(3, 'Name must be at least 3 characters'),
   email: z.string().email('Enter a valid email'),
-  password: z.string().optional(),
-  confPassword: z.string().optional(),
+  password: z.string().optional().or(z.literal('')),
+  confPassword: z.string().optional().or(z.literal('')),
   role: z.enum(['admin', 'user']),
-}).refine((d) => d.password === d.confPassword, {
+}).refine((d) => {
+  if (d.password && d.password !== d.confPassword) return false
+  return true
+}, {
   message: 'Passwords do not match',
   path: ['confPassword'],
 })
@@ -37,37 +40,73 @@ const editSchema = z.object({
 export default function UsersPage() {
   const qc = useQueryClient()
   const [modalOpen, setModalOpen] = useState(false)
-  const [editing, setEditing] = useState(null)
-  const [deleteTarget, setDeleteTarget] = useState(null)
+  const [editingId, setEditingId] = useState(null)
+  const [deleteTargetId, setDeleteTargetId] = useState(null)
 
   const { data: users, isLoading } = useQuery({ queryKey: ['users'], queryFn: getUsers })
 
-  const schema = editing ? editSchema : createSchema
+  // Fetch user by ID for edit modal
+  const { data: editingUser, isLoading: loadingEdit } = useQuery({
+    queryKey: ['user', editingId],
+    queryFn: () => getUserById(editingId),
+    enabled: !!editingId && modalOpen,
+  })
+
+  // Fetch user by ID for delete confirmation
+  const { data: deleteUserData, isLoading: loadingDelete } = useQuery({
+    queryKey: ['user', deleteTargetId],
+    queryFn: () => getUserById(deleteTargetId),
+    enabled: !!deleteTargetId,
+  })
+
+  const isEditing = !!editingId
+  const schema = isEditing ? editSchema : createSchema
   const { register, handleSubmit, reset, formState: { errors, isSubmitting } } = useForm({
     resolver: zodResolver(schema),
   })
 
-  const openCreate = () => { setEditing(null); reset({ name: '', email: '', password: '', confPassword: '', role: 'user' }); setModalOpen(true) }
-  const openEdit = (u) => { setEditing(u); reset({ name: u.name, email: u.email, password: '', confPassword: '', role: u.role }); setModalOpen(true) }
+  // Populate form when edit data loads
+  useEffect(() => {
+    if (editingUser) {
+      reset({
+        name: editingUser.name,
+        email: editingUser.email,
+        password: '',
+        confPassword: '',
+        role: editingUser.role
+      })
+    }
+  }, [editingUser, reset])
+
+  // Reset form on modal close
+  useEffect(() => {
+    if (!modalOpen) {
+      setEditingId(null)
+      reset({ name: '', email: '', password: '', confPassword: '', role: 'user' })
+    }
+  }, [modalOpen, reset])
+
+  const openCreate = () => { setEditingId(null); setModalOpen(true) }
+  const openEdit = (u) => { setEditingId(u.uuid); setModalOpen(true) }
 
   const saveMutation = useMutation({
-    mutationFn: (data) => editing ? updateUser(editing.uuid, data) : createUser(data),
+    mutationFn: (data) => editingId ? updateUser(editingId, data) : createUser(data),
     onSuccess: (res) => {
       toast.success(res.msg)
       qc.invalidateQueries({ queryKey: ['users'] })
       setModalOpen(false)
     },
-    onError: (err) => toast.error(err?.response?.data?.msg || 'Operation failed'),
+    onError: (err) => toast.error(err?.response?.data?.msg || err?.response?.data?.error || 'Operation failed'),
   })
 
   const deleteMutation = useMutation({
-    mutationFn: () => deleteUser(deleteTarget.uuid),
+    mutationFn: () => deleteUser(deleteTargetId),
     onSuccess: (res) => {
       toast.success(res.msg)
       qc.invalidateQueries({ queryKey: ['users'] })
-      setDeleteTarget(null)
+      setDeleteTargetId(null)
     },
-    onError: (err) => toast.error(err?.response?.data?.msg || 'Delete failed'),
+    onError: (err) => toast.error(err?.response?.data?.msg || err?.response?.data?.error || 'Delete failed'),
   })
 
   const roleBadge = (role) => (
@@ -131,7 +170,7 @@ export default function UsersPage() {
                           <Pencil size={15} />
                         </button>
                         <button
-                          onClick={() => setDeleteTarget(u)}
+                          onClick={() => setDeleteTargetId(u.uuid)}
                           className="p-1.5 rounded-lg text-slate-500 hover:bg-red-50 hover:text-red-500 transition-colors"
                         >
                           <Trash2 size={15} />
@@ -147,51 +186,73 @@ export default function UsersPage() {
       </div>
 
       {/* Create / Edit Modal */}
-      <Modal open={modalOpen} onOpenChange={setModalOpen} title={editing ? 'Edit User' : 'Add User'}>
-        <form onSubmit={handleSubmit((d) => saveMutation.mutate(d))} className="flex flex-col gap-4">
-          <FormField label="Full Name" error={errors.name?.message}>
-            <Input placeholder="John Doe" {...register('name')} />
-          </FormField>
-          <FormField label="Email" error={errors.email?.message}>
-            <Input type="email" placeholder="john@example.com" {...register('email')} />
-          </FormField>
-          <FormField label={editing ? 'New Password (leave blank to keep)' : 'Password'} error={errors.password?.message}>
-            <Input type="password" placeholder="••••••••" {...register('password')} />
-          </FormField>
-          <FormField label="Confirm Password" error={errors.confPassword?.message}>
-            <Input type="password" placeholder="••••••••" {...register('confPassword')} />
-          </FormField>
-          <FormField label="Role" error={errors.role?.message}>
-            <Select {...register('role')}>
-              <option value="user">User</option>
-              <option value="admin">Admin</option>
-            </Select>
-          </FormField>
-          <div className="flex justify-end gap-3 mt-2">
-            <button
-              type="button"
-              onClick={() => setModalOpen(false)}
-              className="px-4 py-2 text-sm rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={isSubmitting || saveMutation.isPending}
-              className="px-4 py-2 text-sm rounded-lg bg-primary-500 text-white hover:bg-primary-600 transition-colors disabled:opacity-60"
-            >
-              {saveMutation.isPending ? 'Saving…' : editing ? 'Update' : 'Create'}
-            </button>
+      <Modal
+        open={modalOpen}
+        onOpenChange={setModalOpen}
+        title={isEditing ? 'Edit User' : 'Add User'}
+      >
+        {loadingEdit ? (
+          <div className="space-y-4 py-2">
+            <div className="h-10 bg-slate-200 rounded animate-pulse" />
+            <div className="h-10 bg-slate-200 rounded animate-pulse" />
+            <div className="h-10 bg-slate-200 rounded animate-pulse" />
+            <div className="h-10 bg-slate-200 rounded animate-pulse" />
+            <div className="h-10 bg-slate-200 rounded animate-pulse" />
+            <div className="flex justify-end gap-3">
+              <div className="h-9 bg-slate-200 rounded w-20 animate-pulse" />
+              <div className="h-9 bg-slate-200 rounded w-20 animate-pulse" />
+            </div>
           </div>
-        </form>
+        ) : (
+          <form onSubmit={handleSubmit((d) => saveMutation.mutate(d))} className="flex flex-col gap-4">
+            <FormField label="Full Name" error={errors.name?.message}>
+              <Input placeholder="John Doe" {...register('name')} />
+            </FormField>
+            <FormField label="Email" error={errors.email?.message}>
+              <Input type="email" placeholder="john@example.com" {...register('email')} />
+            </FormField>
+            <FormField label={isEditing ? 'New Password (leave blank to keep)' : 'Password'} error={errors.password?.message}>
+              <Input type="password" placeholder="••••••••" autoComplete="new-password" {...register('password')} />
+            </FormField>
+            <FormField label="Confirm Password" error={errors.confPassword?.message}>
+              <Input type="password" placeholder="••••••••" autoComplete="new-password" {...register('confPassword')} />
+            </FormField>
+            <FormField label="Role" error={errors.role?.message}>
+              <Select {...register('role')}>
+                <option value="user">User</option>
+                <option value="admin">Admin</option>
+              </Select>
+            </FormField>
+            <div className="flex justify-end gap-3 mt-2">
+              <button
+                type="button"
+                onClick={() => setModalOpen(false)}
+                className="px-4 py-2 text-sm rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={isSubmitting || saveMutation.isPending}
+                className="px-4 py-2 text-sm rounded-lg bg-primary-500 text-white hover:bg-primary-600 transition-colors disabled:opacity-60"
+              >
+                {saveMutation.isPending ? 'Saving…' : isEditing ? 'Update' : 'Create'}
+              </button>
+            </div>
+          </form>
+        )}
       </Modal>
 
       {/* Delete Confirm */}
       <ConfirmDialog
-        open={!!deleteTarget}
-        onOpenChange={(v) => !v && setDeleteTarget(null)}
+        open={!!deleteTargetId}
+        onOpenChange={(v) => { if (!v) setDeleteTargetId(null); }}
         title="Delete User"
-        description={`Are you sure you want to delete "${deleteTarget?.name}"? This action cannot be undone.`}
+        description={
+          loadingDelete
+            ? 'Loading user details…'
+            : `Are you sure you want to delete "${deleteUserData?.name}"? This action cannot be undone.`
+        }
         onConfirm={() => deleteMutation.mutate()}
       />
     </Layout>
