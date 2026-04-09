@@ -49,13 +49,13 @@ export default function DashboardPage() {
     <Layout>
       <div className="mb-6">
         <h2 className="text-2xl font-bold text-slate-800">Dashboard</h2>
-        <p className="text-slate-500 text-sm mt-1">
+        <div className="text-slate-500 text-sm mt-1">
           {isLoading ? (
             <div className="h-4 bg-slate-200 rounded animate-pulse w-48 inline-block" />
           ) : (
             <>Hello, <span className="font-medium text-primary-500">{user?.name}</span> 👋</>
           )}
-        </p>
+        </div>
       </div>
 
       {isLoading ? (

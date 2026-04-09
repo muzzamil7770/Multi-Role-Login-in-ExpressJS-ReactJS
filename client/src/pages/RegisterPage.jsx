@@ -89,6 +89,7 @@ export default function RegisterPage() {
               <Input
                 type="password"
                 placeholder="••••••••"
+                autoComplete="new-password"
                 {...register('password')}
               />
             </FormField>
@@ -97,6 +98,7 @@ export default function RegisterPage() {
               <Input
                 type="password"
                 placeholder="••••••••"
+                autoComplete="new-password"
                 {...register('confPassword')}
               />
             </FormField>

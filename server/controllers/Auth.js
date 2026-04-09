@@ -1,5 +1,7 @@
 import User from "../models/UserModel.js";
+import UserSessions from "../models/UserSessionModel.js";
 import argon2 from "argon2";
+import { SessionService } from '../services/NotificationService.js';
 
 // Registers a new user with complete details and returns the created user data.
 export const registerUser = async (req, res) => {
@@ -55,10 +57,19 @@ export const Login = async (req, res) =>{
     const match = await argon2.verify(user.password, req.body.password);
     if(!match) return res.status(400).json({msg: "Incorrect password"});
     req.session.userId = user.uuid;
+    
+    // Create session track
+    await SessionService.createSession(user.id, req);
+    
+    // Handle new login alert (email + notification)
+    SessionService.handleNewLogin(user, req).catch(err => {
+        console.error('Login alert handler failed:', err.message);
+    });
+    
     res.status(200).json({
-        uuid: user.uuid, 
-        name: user.name, 
-        email: user.email, 
+        uuid: user.uuid,
+        name: user.name,
+        email: user.email,
         role: user.role,
         createdAt: user.createdAt
     });
