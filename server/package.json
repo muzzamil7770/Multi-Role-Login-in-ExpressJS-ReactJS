@@ -5,7 +5,7 @@
   "type": "module",
   "main": "index.js",
   "scripts": {
-    "dev": "nodemon index.js",
+    "dev": "node init && nodemon index.js",
     "test": "echo \"Error: no test specified\" && exit 1",
     "db:create": "node scripts/create-database.js",
     "db:migrate": "sequelize-cli db:migrate",
